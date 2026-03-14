@@ -1,16 +1,18 @@
 """
-SMTP email service for Villa Sirene di Positano.
+Email service for Villa Sirene di Positano.
 
 Sends styled HTML confirmation, modification, and cancellation emails.
-Reads credentials from a .env file in the project root or from environment
-variables.  Falls back gracefully (returns False) when unconfigured.
 
-Required env vars:
-    SMTP_USER  — sender email address (e.g. Gmail)
-    SMTP_PASS  — app-specific password (NOT the account password)
-Optional:
-    SMTP_HOST  — defaults to smtp.gmail.com
-    SMTP_PORT  — defaults to 587 (STARTTLS)
+Transport priority:
+    1. Amazon SES via boto3 — uses EC2 IAM role credentials (no passwords)
+    2. SMTP relay — configured via .env / environment variables
+    3. Graceful no-op with log warning when neither is available
+
+SES env vars (optional overrides):
+    SES_REGION  — AWS region for SES (default: eu-central-1)
+    SES_SENDER  — verified sender email; auto-detected from SES if unset
+SMTP env vars (fallback):
+    SMTP_HOST / SMTP_PORT / SMTP_USER / SMTP_PASS
 """
 
 import os
@@ -35,29 +37,102 @@ def _load_env():
 
 _load_env()
 
+SES_REGION = os.environ.get("SES_REGION", "eu-central-1")
+SES_SENDER = os.environ.get("SES_SENDER", "")
+
 SMTP_HOST = os.environ.get("SMTP_HOST", "smtp.gmail.com")
 SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
 SMTP_USER = os.environ.get("SMTP_USER", "")
 SMTP_PASS = os.environ.get("SMTP_PASS", "")
+
 FROM_NAME = "Villa Sirene di Positano"
+
+_ses_client = None
+_ses_available = None
+
+
+def _get_ses_client():
+    """Lazily initialise and return a boto3 SES client, or None."""
+    global _ses_client, _ses_available
+    if _ses_available is not None:
+        return _ses_client
+    try:
+        import boto3
+        client = boto3.client("ses", region_name=SES_REGION)
+        client.get_send_quota()
+        _ses_client = client
+        _ses_available = True
+        print(f"[Email] SES transport active (region={SES_REGION})")
+    except Exception as exc:
+        print(f"[Email] SES unavailable: {exc}")
+        _ses_client = None
+        _ses_available = False
+    return _ses_client
+
+
+def _resolve_ses_sender():
+    """Return the SES sender address from config or auto-detect from verified identities."""
+    if SES_SENDER:
+        return SES_SENDER
+    client = _get_ses_client()
+    if not client:
+        return ""
+    try:
+        resp = client.list_verified_email_addresses()
+        emails = resp.get("VerifiedEmailAddresses", [])
+        if emails:
+            return emails[0]
+    except Exception:
+        pass
+    return ""
 
 
 def is_configured():
+    """Return True if at least one email transport is usable."""
+    if _get_ses_client() and _resolve_ses_sender():
+        return True
     return bool(SMTP_USER and SMTP_PASS)
 
 
 def _send(to_email, subject, html_body):
-    """Send an HTML email via SMTP/TLS. Returns True on success."""
-    if not is_configured():
-        print("[Email] SMTP not configured — skipping send.")
+    """Send an HTML email.  Tries SES first, then SMTP, then logs a skip."""
+    client = _get_ses_client()
+    sender = _resolve_ses_sender()
+    if client and sender:
+        return _send_ses(client, sender, to_email, subject, html_body)
+
+    if SMTP_USER and SMTP_PASS:
+        return _send_smtp(to_email, subject, html_body)
+
+    print("[Email] No transport configured — skipping send.")
+    return False
+
+
+def _send_ses(client, sender, to_email, subject, html_body):
+    """Send via Amazon SES API (boto3)."""
+    try:
+        client.send_email(
+            Source=f"{FROM_NAME} <{sender}>",
+            Destination={"ToAddresses": [to_email]},
+            Message={
+                "Subject": {"Data": subject, "Charset": "UTF-8"},
+                "Body": {"Html": {"Data": html_body, "Charset": "UTF-8"}},
+            },
+        )
+        print(f"[Email] SES sent '{subject}' to {to_email}")
+        return True
+    except Exception as exc:
+        print(f"[Email] SES send failed ({to_email}): {exc}")
         return False
 
+
+def _send_smtp(to_email, subject, html_body):
+    """Send via SMTP relay (e.g. Gmail with App Password)."""
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
     msg["From"] = f"{FROM_NAME} <{SMTP_USER}>"
     msg["To"] = to_email
     msg.attach(MIMEText(html_body, "html", "utf-8"))
-
     try:
         with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10) as server:
             server.ehlo()
@@ -65,10 +140,10 @@ def _send(to_email, subject, html_body):
             server.ehlo()
             server.login(SMTP_USER, SMTP_PASS)
             server.send_message(msg)
-        print(f"[Email] Sent '{subject}' to {to_email}")
+        print(f"[Email] SMTP sent '{subject}' to {to_email}")
         return True
     except Exception as exc:
-        print(f"[Email] Failed to send to {to_email}: {exc}")
+        print(f"[Email] SMTP send failed ({to_email}): {exc}")
         return False
 
 

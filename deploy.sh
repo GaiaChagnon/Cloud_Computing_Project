@@ -14,7 +14,7 @@ echo "==> Installing Python 3 and pip..."
 sudo yum install -y python3 python3-pip git 2>/dev/null || sudo dnf install -y python3 python3-pip git 2>/dev/null
 
 echo "==> Installing Python dependencies (system-wide for sudo access)..."
-sudo pip3 install flask python-dateutil gunicorn
+sudo pip3 install flask python-dateutil gunicorn boto3
 
 echo "==> Initialising database..."
 python3 -c "import sys; sys.path.insert(0,'.'); from database import init_db; init_db('hotel.db')"
