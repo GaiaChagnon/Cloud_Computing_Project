@@ -29,7 +29,7 @@
     let roomsLoaded = false;
 
     const ROOM_IMAGES = {
-        classic:   "https://images.unsplash.com/photo-1590490360182-c33d955bc37e?w=480&h=300&fit=crop&q=80",
+        classic:   "https://images.unsplash.com/photo-1566665797739-1674de7a421a?w=480&h=300&fit=crop&q=80",
         superior:  "https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?w=480&h=300&fit=crop&q=80",
         deluxe:    "https://images.unsplash.com/photo-1602002418082-a4443e081dd1?w=480&h=300&fit=crop&q=80",
         suite:     "https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=480&h=300&fit=crop&q=80",

@@ -557,6 +557,9 @@ _HANDLERS = {
 }
 
 
+_ID_ENTRY_STATES = {MOD_ID, VIEW_ID, CANCEL_ID}
+
+
 def process_message(message, state, data, db_path="hotel.db"):
     """
     Process a user message given the current conversation state.
@@ -573,6 +576,13 @@ def process_message(message, state, data, db_path="hotel.db"):
             "Of course. " + _welcome().split("\n\n", 1)[1],
             IDLE, {}
         )
+
+    if state != IDLE:
+        intent = _detect_intent(msg)
+        if intent in ("GREETING", "INFO"):
+            return _handle_idle(msg, {}, db_path)
+        if intent != "UNKNOWN" and state in _ID_ENTRY_STATES:
+            return _handle_idle(msg, {}, db_path)
 
     handler = _HANDLERS.get(state, _handle_idle)
     return handler(msg, data, db_path)
