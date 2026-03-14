@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Villa Sirene di Positano — Concierge</title>
+    <meta name="description" content="Villa Sirene di Positano — boutique luxury hotel on the Amalfi Coast. Book your stay with our personal concierge.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -28,6 +29,10 @@
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                         <span>Concierge</span>
                     </button>
+                    <button class="nav-btn" data-target="rooms">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                        <span>Our Rooms</span>
+                    </button>
                     <button class="nav-btn" data-target="lookup">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
                         <span>My Booking</span>
@@ -35,6 +40,19 @@
                 </nav>
             </div>
         </header>
+
+        <!-- ===== Feature Strip ===== -->
+        <div class="feature-strip">
+            <span>Est. 1962</span>
+            <span class="fs-dot"></span>
+            <span>12 Exclusive Rooms</span>
+            <span class="fs-dot"></span>
+            <span>Private Beach</span>
+            <span class="fs-dot"></span>
+            <span>Infinity Pool</span>
+            <span class="fs-dot"></span>
+            <span>La Terrazza Dining</span>
+        </div>
 
         <!-- ===== Chat View ===== -->
         <section class="view view-chat active" id="viewChat">
@@ -99,6 +117,49 @@
             </footer>
         </section>
 
+        <!-- ===== Rooms View ===== -->
+        <section class="view view-rooms" id="viewRooms">
+            <div class="rooms-page">
+                <div class="rooms-hero">
+                    <h2>Our Rooms &amp; Suites</h2>
+                    <p>Each of our 12 rooms has been individually designed to reflect the timeless beauty of the Amalfi Coast, blending Mediterranean charm with modern luxury.</p>
+                </div>
+                <div class="rooms-grid" id="roomsGrid">
+                    <!-- Populated by JS -->
+                </div>
+                <div class="rooms-cta">
+                    <p>Ready to experience Villa Sirene?</p>
+                    <button class="btn-primary" id="btnBookFromRooms">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                        Book via Concierge
+                    </button>
+                </div>
+
+                <footer class="site-footer">
+                    <div class="footer-inner">
+                        <div class="footer-brand">
+                            <div class="footer-mono">VS</div>
+                            <strong>Villa Sirene di Positano</strong>
+                            <span>Since 1962</span>
+                        </div>
+                        <div class="footer-col">
+                            <h4>Contact</h4>
+                            <p>Via Cristoforo Colombo 30<br>84017 Positano SA, Italy</p>
+                            <p>+39 089 875 0000<br>info@villasirene.it</p>
+                        </div>
+                        <div class="footer-col">
+                            <h4>Guest Services</h4>
+                            <p>Check-in: from 3:00 PM<br>Check-out: by 11:00 AM</p>
+                            <p>Concierge: 24/7<br>Room Service: 7 AM - 11 PM</p>
+                        </div>
+                    </div>
+                    <div class="footer-bottom">
+                        &copy; 2026 Villa Sirene di Positano. All rights reserved. Guest data is handled securely and never shared with third parties.
+                    </div>
+                </footer>
+            </div>
+        </section>
+
         <!-- ===== Booking Lookup View ===== -->
         <section class="view view-lookup" id="viewLookup">
             <div class="lookup-page">
@@ -108,26 +169,21 @@
                         <h2>Guest Portal</h2>
                         <p>Look up your reservation details</p>
                     </div>
-
                     <form id="lookupForm" autocomplete="off">
                         <div class="field-group">
                             <label for="lookupCode">Confirmation Code</label>
                             <input type="text" id="lookupCode" placeholder="e.g. VS-A1B2C3" spellcheck="false">
                         </div>
-
                         <div class="field-divider"><span>or</span></div>
-
                         <div class="field-group">
                             <label for="lookupId">ID / Passport Number</label>
                             <input type="text" id="lookupId" placeholder="Enter your document number" spellcheck="false">
                         </div>
-
                         <button type="submit" class="btn-primary" id="btnLookup">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                             Look Up Reservation
                         </button>
                     </form>
-
                     <div class="lookup-error" id="lookupError" style="display:none">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
                         <span>No reservation found. Please check your details and try again.</span>
@@ -139,36 +195,15 @@
                         <span class="status-badge confirmed">Confirmed</span>
                     </div>
                     <h3 class="result-code" id="resultCode">VS-XXXXXX</h3>
-
                     <div class="result-grid">
-                        <div class="result-item">
-                            <span class="ri-label">Guest</span>
-                            <span class="ri-value" id="resGuest">-</span>
-                        </div>
-                        <div class="result-item">
-                            <span class="ri-label">Room</span>
-                            <span class="ri-value" id="resRoom">-</span>
-                        </div>
-                        <div class="result-item">
-                            <span class="ri-label">Check-in</span>
-                            <span class="ri-value" id="resCheckIn">-</span>
-                        </div>
-                        <div class="result-item">
-                            <span class="ri-label">Check-out</span>
-                            <span class="ri-value" id="resCheckOut">-</span>
-                        </div>
-                        <div class="result-item">
-                            <span class="ri-label">Duration</span>
-                            <span class="ri-value" id="resNights">-</span>
-                        </div>
-                        <div class="result-item">
-                            <span class="ri-label">Total</span>
-                            <span class="ri-value result-price" id="resTotal">-</span>
-                        </div>
+                        <div class="result-item"><span class="ri-label">Guest</span><span class="ri-value" id="resGuest">-</span></div>
+                        <div class="result-item"><span class="ri-label">Room</span><span class="ri-value" id="resRoom">-</span></div>
+                        <div class="result-item"><span class="ri-label">Check-in</span><span class="ri-value" id="resCheckIn">-</span></div>
+                        <div class="result-item"><span class="ri-label">Check-out</span><span class="ri-value" id="resCheckOut">-</span></div>
+                        <div class="result-item"><span class="ri-label">Duration</span><span class="ri-value" id="resNights">-</span></div>
+                        <div class="result-item"><span class="ri-label">Total</span><span class="ri-value result-price" id="resTotal">-</span></div>
                     </div>
-
                     <div class="result-email" id="resEmail">-</div>
-
                     <div class="result-actions">
                         <button class="btn-outline" id="btnModifyFromLookup">Modify Booking</button>
                         <button class="btn-outline" id="btnPrintConfirmation">Print Confirmation</button>
@@ -193,7 +228,7 @@
                         <p class="ep-greeting" id="epGreeting">Dear Guest,</p>
                         <p>Thank you for choosing Villa Sirene. Your reservation has been confirmed. Below are the details of your stay.</p>
                         <div class="ep-details" id="epDetails"></div>
-                        <p>A copy of this confirmation has been sent to your email address on file.</p>
+                        <p>A confirmation email has been sent to your email address.</p>
                         <p>We look forward to welcoming you.</p>
                         <p class="ep-sign"><em>The Concierge Team</em><br>Villa Sirene di Positano</p>
                     </div>

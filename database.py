@@ -346,3 +346,39 @@ def get_all_rooms(db_path):
     ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+
+def get_room_type_summary(db_path):
+    """Return one entry per room type with aggregated counts and floor range."""
+    conn = get_db(db_path)
+    rows = conn.execute(
+        """
+        SELECT room_type,
+               price_per_night,
+               description,
+               COUNT(*)   AS total_rooms,
+               MIN(floor) AS min_floor,
+               MAX(floor) AS max_floor
+        FROM rooms
+        GROUP BY room_type
+        ORDER BY price_per_night ASC
+        """
+    ).fetchall()
+    conn.close()
+
+    labels = {
+        "classic": "Classic", "superior": "Superior", "deluxe": "Deluxe",
+        "suite": "Suite", "penthouse": "Penthouse Suite",
+    }
+    return [
+        {
+            "type": r["room_type"],
+            "label": labels.get(r["room_type"], r["room_type"].title()),
+            "price": r["price_per_night"],
+            "description": r["description"],
+            "total_rooms": r["total_rooms"],
+            "floors": (str(r["min_floor"]) if r["min_floor"] == r["max_floor"]
+                       else f"{r['min_floor']}-{r['max_floor']}"),
+        }
+        for r in rows
+    ]

@@ -2,7 +2,8 @@
  * Villa Sirene — Concierge Frontend
  *
  * Handles: chat messaging, markdown rendering, view switching,
- * reservation lookup, email confirmation modal, toast notifications.
+ * rooms showcase, reservation lookup, email confirmation modal,
+ * and toast notifications.
  */
 
 (function () {
@@ -22,85 +23,87 @@
     const modalClose  = document.getElementById("modalClose");
     const toast       = document.getElementById("toast");
     const toastText   = document.getElementById("toastText");
+    const roomsGrid   = document.getElementById("roomsGrid");
 
     let sending = false;
+    let roomsLoaded = false;
+
+    const ROOM_IMAGES = {
+        classic:   "https://images.unsplash.com/photo-1590490360182-c33d955bc37e?w=480&h=300&fit=crop&q=80",
+        superior:  "https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?w=480&h=300&fit=crop&q=80",
+        deluxe:    "https://images.unsplash.com/photo-1602002418082-a4443e081dd1?w=480&h=300&fit=crop&q=80",
+        suite:     "https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=480&h=300&fit=crop&q=80",
+        penthouse: "https://images.unsplash.com/photo-1618773928121-c32242e63f39?w=480&h=300&fit=crop&q=80",
+    };
+
+    const ROOM_COLORS = {
+        classic: "#c9a84c", superior: "#7a9e7e", deluxe: "#4a7a9e",
+        suite: "#7a5a8e", penthouse: "#c47a3a",
+    };
 
     /* ==============================================================
-       MARKDOWN-LITE RENDERER
+       MARKDOWN-LITE
        ============================================================== */
 
     function renderMarkdown(text) {
-        const esc = text
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;");
-
+        const esc = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
         const lines = esc.split("\n");
-        let html = "";
-        let inList = false;
-
+        let html = "", inList = false;
         for (const raw of lines) {
             const line = raw.trim();
             if (line.startsWith("- ")) {
                 if (!inList) { html += "<ul>"; inList = true; }
-                html += "<li>" + inline(line.slice(2)) + "</li>";
+                html += "<li>" + inl(line.slice(2)) + "</li>";
                 continue;
             }
             if (inList) { html += "</ul>"; inList = false; }
             if (line === "") continue;
-            html += "<p>" + inline(line) + "</p>";
+            html += "<p>" + inl(line) + "</p>";
         }
         if (inList) html += "</ul>";
         return html;
     }
 
-    function inline(s) {
-        return s
-            .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-            .replace(/\*(.+?)\*/g, "<em>$1</em>");
+    function inl(s) {
+        return s.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+                .replace(/\*(.+?)\*/g, "<em>$1</em>");
     }
 
     /* ==============================================================
        DOM HELPERS
        ============================================================== */
 
-    function scrollToBottom() {
-        requestAnimationFrame(() => {
-            chatScroll.scrollTop = chatScroll.scrollHeight;
-        });
+    function scrollBottom() {
+        requestAnimationFrame(() => { chatScroll.scrollTop = chatScroll.scrollHeight; });
     }
 
-    function escapeHtml(s) {
+    function esc(s) {
         const d = document.createElement("div");
         d.textContent = s;
         return d.innerHTML;
     }
 
-    function hideQuickActions() {
-        if (quickActs) quickActs.style.display = "none";
-    }
+    function hideQuickActions() { if (quickActs) quickActs.style.display = "none"; }
 
-    function addUserMessage(text) {
+    function addUserMsg(text) {
         hideQuickActions();
         const el = document.createElement("div");
         el.className = "message user-message";
         el.innerHTML =
             '<div class="msg-avatar"><span>You</span></div>' +
-            '<div class="msg-body"><div class="msg-content"><p>' +
-            escapeHtml(text) + '</p></div></div>';
+            '<div class="msg-body"><div class="msg-content"><p>' + esc(text) + '</p></div></div>';
         chatInner.appendChild(el);
-        scrollToBottom();
+        scrollBottom();
     }
 
-    function addBotMessage(text) {
+    function addBotMsg(text) {
         const el = document.createElement("div");
         el.className = "message bot-message";
         el.innerHTML =
             '<div class="msg-avatar"><span>VS</span></div>' +
-            '<div class="msg-body"><div class="msg-content">' +
-            renderMarkdown(text) + '</div></div>';
+            '<div class="msg-body"><div class="msg-content">' + renderMarkdown(text) + '</div></div>';
         chatInner.appendChild(el);
-        scrollToBottom();
+        scrollBottom();
     }
 
     function showTyping() {
@@ -112,7 +115,7 @@
             '<div class="msg-body"><div class="msg-content typing-dots">' +
             '<span></span><span></span><span></span></div></div>';
         chatInner.appendChild(el);
-        scrollToBottom();
+        scrollBottom();
     }
 
     function hideTyping() {
@@ -121,15 +124,16 @@
     }
 
     /* ==============================================================
-       CHAT NETWORK
+       CHAT
        ============================================================== */
 
     async function sendMessage(text) {
         if (sending || !text.trim()) return;
         sending = true;
         sendBtn.disabled = true;
+        switchView("chat");
 
-        addUserMessage(text.trim());
+        addUserMsg(text.trim());
         inputEl.value = "";
         autoResize();
         showTyping();
@@ -142,7 +146,7 @@
             });
             const data = await res.json();
             hideTyping();
-            addBotMessage(data.response);
+            addBotMsg(data.response);
 
             if (data.event === "booking_confirmed" && data.confirmation) {
                 showEmailConfirmation(data.confirmation);
@@ -154,7 +158,7 @@
             }
         } catch {
             hideTyping();
-            addBotMessage("I apologise, but I am experiencing a temporary issue. Please try again in a moment.");
+            addBotMsg("I apologise, but I am experiencing a temporary issue. Please try again in a moment.");
         } finally {
             sending = false;
             sendBtn.disabled = false;
@@ -175,12 +179,48 @@
         document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
         document.querySelectorAll(".nav-btn").forEach(b => b.classList.remove("active"));
 
-        const view = document.getElementById("view" + target.charAt(0).toUpperCase() + target.slice(1));
+        const id = "view" + target.charAt(0).toUpperCase() + target.slice(1);
+        const view = document.getElementById(id);
         const btn = document.querySelector('[data-target="' + target + '"]');
         if (view) view.classList.add("active");
         if (btn) btn.classList.add("active");
 
         if (target === "chat") inputEl.focus();
+        if (target === "rooms" && !roomsLoaded) loadRooms();
+    }
+
+    /* ==============================================================
+       ROOMS PAGE
+       ============================================================== */
+
+    async function loadRooms() {
+        try {
+            const res = await fetch("/api/rooms");
+            const rooms = await res.json();
+            roomsGrid.innerHTML = "";
+            for (const r of rooms) {
+                const img = ROOM_IMAGES[r.type] || "";
+                const color = ROOM_COLORS[r.type] || "#c9a84c";
+                const card = document.createElement("div");
+                card.className = "room-card";
+                card.innerHTML =
+                    '<div class="room-card-img" style="background-image:url(' + img + ');background-color:' + color + '">' +
+                        '<span class="room-card-price">EUR ' + r.price + ' / night</span>' +
+                    '</div>' +
+                    '<div class="room-card-body">' +
+                        '<h3>' + esc(r.label) + '</h3>' +
+                        '<p>' + esc(r.description) + '</p>' +
+                        '<div class="room-card-meta">' +
+                            '<span>Floor ' + r.floors + '</span>' +
+                            '<span>' + r.total_rooms + ' room' + (r.total_rooms > 1 ? 's' : '') + '</span>' +
+                        '</div>' +
+                    '</div>';
+                roomsGrid.appendChild(card);
+            }
+            roomsLoaded = true;
+        } catch {
+            roomsGrid.innerHTML = '<p style="text-align:center;color:#999;">Unable to load rooms.</p>';
+        }
     }
 
     /* ==============================================================
@@ -191,48 +231,37 @@
         e.preventDefault();
         const code = document.getElementById("lookupCode").value.trim();
         const idNum = document.getElementById("lookupId").value.trim();
-
         if (!code && !idNum) return;
 
         lookupError.style.display = "none";
         resultCard.style.display = "none";
-
         const btn = document.getElementById("btnLookup");
         btn.disabled = true;
         btn.textContent = "Searching...";
 
         try {
-            const body = {};
-            if (code) body.confirmation_code = code;
-            else body.id_number = idNum;
-
+            const body = code ? { confirmation_code: code } : { id_number: idNum };
             const res = await fetch("/api/lookup", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(body),
             });
             const data = await res.json();
-
-            if (!data.found) {
-                lookupError.style.display = "flex";
-                return;
-            }
+            if (!data.found) { lookupError.style.display = "flex"; return; }
 
             const r = data.reservation;
             document.getElementById("resultCode").textContent = r.confirmation_code;
             document.getElementById("resGuest").textContent = r.guest_name;
             document.getElementById("resRoom").textContent = r.room_type + " (Room " + r.room_number + ")";
-            document.getElementById("resCheckIn").textContent = formatDate(r.check_in);
-            document.getElementById("resCheckOut").textContent = formatDate(r.check_out);
+            document.getElementById("resCheckIn").textContent = fmtDate(r.check_in);
+            document.getElementById("resCheckOut").textContent = fmtDate(r.check_out);
             document.getElementById("resNights").textContent = r.nights + " night" + (r.nights !== 1 ? "s" : "");
             document.getElementById("resTotal").textContent = "EUR " + Number(r.total_price).toLocaleString("en");
             document.getElementById("resEmail").textContent = "Confirmation sent to " + r.email;
 
             const badge = document.getElementById("resultStatus");
-            const status = r.status || "confirmed";
-            badge.innerHTML = '<span class="status-badge ' + status + '">' +
-                status.charAt(0).toUpperCase() + status.slice(1) + '</span>';
-
+            const st = r.status || "confirmed";
+            badge.innerHTML = '<span class="status-badge ' + st + '">' + st.charAt(0).toUpperCase() + st.slice(1) + '</span>';
             resultCard.style.display = "block";
         } catch {
             lookupError.style.display = "flex";
@@ -245,7 +274,7 @@
         }
     }
 
-    function formatDate(iso) {
+    function fmtDate(iso) {
         const d = new Date(iso + "T00:00:00");
         return d.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
     }
@@ -256,36 +285,31 @@
 
     function showEmailConfirmation(conf) {
         document.getElementById("epGreeting").textContent = "Dear " + conf.guest_name + ",";
-
-        const details = document.getElementById("epDetails");
-        details.innerHTML =
-            item("Confirmation", conf.code) +
-            item("Room", conf.room_type + " (Room " + conf.room_number + ")") +
-            item("Check-in", formatDate(conf.check_in)) +
-            item("Check-out", formatDate(conf.check_out)) +
-            item("Duration", conf.nights + " night" + (conf.nights !== 1 ? "s" : "")) +
-            item("Total", "EUR " + Number(conf.total_price).toLocaleString("en"));
-
+        const det = document.getElementById("epDetails");
+        det.innerHTML =
+            edItem("Confirmation", conf.code) +
+            edItem("Room", conf.room_type + " (Room " + conf.room_number + ")") +
+            edItem("Check-in", fmtDate(conf.check_in)) +
+            edItem("Check-out", fmtDate(conf.check_out)) +
+            edItem("Duration", conf.nights + " night" + (conf.nights !== 1 ? "s" : "")) +
+            edItem("Total", "EUR " + Number(conf.total_price).toLocaleString("en"));
         emailModal.classList.add("open");
     }
 
-    function item(label, value) {
-        return '<div class="ed-item"><span class="ed-label">' + label +
-               '</span><span class="ed-value">' + value + '</span></div>';
+    function edItem(l, v) {
+        return '<div class="ed-item"><span class="ed-label">' + l + '</span><span class="ed-value">' + v + '</span></div>';
     }
 
-    function closeModal() {
-        emailModal.classList.remove("open");
-    }
+    function closeModal() { emailModal.classList.remove("open"); }
 
     /* ==============================================================
        TOAST
        ============================================================== */
 
-    function showToast(message) {
-        toastText.textContent = message;
+    function showToast(msg) {
+        toastText.textContent = msg;
         toast.classList.add("show");
-        setTimeout(() => toast.classList.remove("show"), 4000);
+        setTimeout(() => toast.classList.remove("show"), 4500);
     }
 
     /* ==============================================================
@@ -302,14 +326,9 @@
        ============================================================== */
 
     sendBtn.addEventListener("click", () => sendMessage(inputEl.value));
-
     inputEl.addEventListener("keydown", (e) => {
-        if (e.key === "Enter" && !e.shiftKey) {
-            e.preventDefault();
-            sendMessage(inputEl.value);
-        }
+        if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(inputEl.value); }
     });
-
     inputEl.addEventListener("input", autoResize);
     resetBtn.addEventListener("click", resetChat);
 
@@ -324,24 +343,22 @@
     });
 
     lookupForm.addEventListener("submit", lookupReservation);
-
     modalClose.addEventListener("click", closeModal);
-    emailModal.addEventListener("click", (e) => {
-        if (e.target === emailModal) closeModal();
-    });
+    emailModal.addEventListener("click", (e) => { if (e.target === emailModal) closeModal(); });
 
     document.getElementById("btnModifyFromLookup").addEventListener("click", () => {
         switchView("chat");
         sendMessage("I would like to modify my reservation");
     });
 
-    document.getElementById("btnPrintConfirmation").addEventListener("click", () => {
-        window.print();
+    document.getElementById("btnPrintConfirmation").addEventListener("click", () => window.print());
+
+    document.getElementById("btnBookFromRooms").addEventListener("click", () => {
+        switchView("chat");
+        sendMessage("I would like to book a room");
     });
 
-    document.addEventListener("keydown", (e) => {
-        if (e.key === "Escape") closeModal();
-    });
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeModal(); });
 
     inputEl.focus();
 })();
