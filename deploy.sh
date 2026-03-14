@@ -13,18 +13,18 @@ sudo yum update -y 2>/dev/null || sudo dnf update -y 2>/dev/null
 echo "==> Installing Python 3 and pip..."
 sudo yum install -y python3 python3-pip git 2>/dev/null || sudo dnf install -y python3 python3-pip git 2>/dev/null
 
-echo "==> Installing Python dependencies..."
-pip3 install --user flask python-dateutil gunicorn
+echo "==> Installing Python dependencies (system-wide for sudo access)..."
+sudo pip3 install flask python-dateutil gunicorn
 
 echo "==> Initialising database..."
 python3 -c "import sys; sys.path.insert(0,'.'); from database import init_db; init_db('hotel.db')"
 
 echo "==> Stopping any existing instance..."
-sudo pkill -f "gunicorn.*app:app" 2>/dev/null || true
+sudo pkill gunicorn 2>/dev/null || true
 sleep 1
 
 echo "==> Starting gunicorn on port 80..."
-sudo $(which python3) -m gunicorn \
+sudo /usr/local/bin/gunicorn \
     --workers 1 \
     --bind 0.0.0.0:80 \
     --daemon \
