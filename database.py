@@ -318,3 +318,31 @@ def cancel_reservation(db_path, reservation_id):
     conn.execute("UPDATE reservations SET status='cancelled' WHERE reservation_id=?", (reservation_id,))
     conn.commit()
     conn.close()
+
+
+def find_reservation_by_code(db_path, confirmation_code):
+    """Look up a reservation by its confirmation code."""
+    conn = get_db(db_path)
+    row = conn.execute(
+        """
+        SELECT res.*, g.full_name, g.email, g.id_number,
+               rm.room_type, rm.room_number, rm.price_per_night
+        FROM reservations res
+        JOIN guests g  ON g.guest_id  = res.guest_id
+        JOIN rooms  rm ON rm.room_id  = res.room_id
+        WHERE UPPER(res.confirmation_code) = UPPER(?)
+        """,
+        (confirmation_code.strip(),),
+    ).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def get_all_rooms(db_path):
+    """Return all rooms with their current booking status for display."""
+    conn = get_db(db_path)
+    rows = conn.execute(
+        "SELECT room_number, room_type, floor, price_per_night, description FROM rooms ORDER BY room_number"
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
