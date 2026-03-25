@@ -37,32 +37,32 @@ A full-stack hotel concierge web application deployed on **AWS EC2** with **Amaz
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    Browser (Client)                          │
+│                    Browser (Client)                         │
 │  index.html  ·  script.js  ·  style.css                     │
-│  Three views: Chat / Rooms Showcase / Booking Lookup         │
+│  Three views: Chat / Rooms Showcase / Booking Lookup        │
 └──────────────────────────┬──────────────────────────────────┘
                            │  HTTP (JSON)
                            ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                   app.py — Flask (Gunicorn)                  │
+│                   app.py — Flask (Gunicorn)                 │
 │  /api/chat  ·  /api/rooms  ·  /api/lookup  ·  /api/reset    │
-│  In-memory session store (cookie-based sid)                  │
+│  In-memory session store (cookie-based sid)                 │
 └──────────┬──────────────────────────────┬───────────────────┘
            │                              │
            ▼                              ▼
 ┌──────────────────────┐    ┌──────────────────────────────────┐
-│   chatbot.py          │    │   email_service.py                │
-│   State machine       │    │   SES (boto3) → SMTP → no-op     │
-│   Intent detection    │    │   HTML confirmation emails        │
-│   Room info / FAQ     │    └──────────────────────────────────┘
+│   chatbot.py         │    │   email_service.py               │
+│   State machine      │    │   SES (boto3) → SMTP → no-op     │
+│   Intent detection   │    │   HTML confirmation emails       │
+│   Room info / FAQ    │    └──────────────────────────────────┘
 └──────────┬───────────┘                  ▲
-           │                              │
-           ▼                              │ app.py triggers emails
-┌──────────────────────┐                  │ on booking events
-│   database.py         │                 │
-│   SQLite (hotel.db)   │─────────────────┘
-│   rooms · guests ·    │
-│   reservations        │
+           │                             │
+           ▼                             │ app.py triggers emails
+┌──────────────────────┐                 │ on booking events
+│   database.py        │                 │
+│   SQLite (hotel.db)  │─────────────────┘
+│   rooms · guests ·   │
+│   reservations       │
 └──────────────────────┘
 ```
 
