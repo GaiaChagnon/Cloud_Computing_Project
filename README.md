@@ -29,6 +29,9 @@ A full-stack hotel concierge web application deployed on **AWS EC2** with **Amaz
     - [Security Considerations](#security-considerations)
     - [Troubleshooting](#troubleshooting)
     - [Performance Profile](#performance-profile)
+    - [Lighthouse Audit](#lighthouse-audit)
+    - [Current Capacity Estimate](#current-capacity-estimate)
+    - [Scaling Roadmap](#scaling-roadmap)
 14. [Sample Data](#sample-data)
 
 ---
@@ -677,6 +680,142 @@ Environment variables can be set in a `.env` file in the project root (see `.env
 | Memory footprint | ~30-50 MB | Flask + Gunicorn + SQLite; scales with session count |
 | Database file size | ~40 KB | 12 rooms, 3 sample guests; grows linearly with reservations |
 | Static asset size | ~45 KB total | `style.css` + `script.js` + `index.html`; no framework bundle |
+
+### Lighthouse Audit
+
+Tested against the deployed EC2 instance (emulated desktop, Chromium 146, Lighthouse 13.0.2).
+
+| Category | Score | Notes |
+|----------|-------|-------|
+| **Performance** | 98/100 | 0.6 s FCP, 1.1 s LCP, 0 ms TBT, 0.001 CLS. The vanilla JS + CSS frontend with no framework bundle is effectively zero-cost on the client. |
+| **SEO** | 100/100 | Meta description, viewport tag, and semantic HTML all present. |
+| **Accessibility** | 92/100 | Single flag: a contrast-ratio gap on some background/foreground colour pairs. Fixable with a CSS tweak to the affected elements. |
+| **Best Practices** | 78/100 | All deductions come from missing HTTPS, CSP headers, and HSTS. Resolved at Tier 1 by adding Nginx + TLS termination (see Scaling Roadmap). |
+
+**Diagnostics flagged by Lighthouse:**
+
+- *Minify JavaScript* — estimated 48 KiB saving. Achievable with a one-time build step or Nginx `gzip on`.
+- *Reduce unused JavaScript* — estimated 156 KiB saving. Primarily Google Fonts CSS loading all weights of Inter and Cormorant Garamond. Subset to the weights actually used (Inter 300-600, Cormorant 400/600) to cut this.
+- *Render-blocking requests* — ~350 ms from the Google Fonts stylesheet. Add `font-display: swap` or preload the critical subset inline.
+
+None of these affect server-side scalability. The frontend is already lightweight enough that it is never the bottleneck.
+
+### Current Capacity Estimate
+
+**Setup:** single EC2 instance, 1 synchronous Gunicorn worker, SQLite, in-memory sessions.
+
+**Per-endpoint latency (server-side):**
+
+| Endpoint | Avg latency | What it does |
+|----------|------------|--------------|
+| `/api/chat` (typical) | ~5 ms | Keyword match + SQLite read/write |
+| `/api/chat` (email send) | 100-300 ms | Same as above + blocking SES API round-trip |
+| `/api/rooms` | ~2 ms | Single aggregate SQLite query |
+| `/api/lookup` | ~3 ms | SQLite join on reservations + guests + rooms |
+| Static assets | ~1 ms | Gunicorn serving CSS/JS/HTML from disk |
+
+**Email frequency in practice:** a full reservation flow takes 8-10 chat messages, and only the final confirmation triggers an email send. Many users are browsing rooms, viewing reservations, or asking about amenities — no email at all. Across all traffic, email-triggering requests represent roughly **2-5 %** of total requests.
+
+**Blended throughput calculation (single worker, sequential):**
+
+```
+~97 % of requests at ~5 ms   →  0.97 × 5   =  4.85 ms
+~3 % of requests at ~200 ms  →  0.03 × 200  =  6.00 ms
+                                               ─────────
+Blended average latency       ≈  11 ms/request
+Theoretical throughput         ≈  90 requests/sec
+Comfortable sustained (60 %)  ≈  55 requests/sec
+```
+
+**User activity model:** an active chatter sends roughly 1 request every 6-8 seconds (~0.15 req/s). Connected users who are reading, browsing rooms, or idle generate closer to ~0.05 req/s.
+
+| Metric | Estimate |
+|--------|---------|
+| Theoretical max throughput | ~90 req/s |
+| Comfortable sustained throughput | ~55 req/s |
+| Concurrent **active chatters** (comfortable) | ~200-350 |
+| Total **connected users** (mix of active + idle) | ~500-1,000 |
+
+**Practical comfort zone: ~200-300 concurrently active users.** Beyond that, request queuing behind the occasional SES-blocked request starts pushing p99 latency above 500 ms. Total connected users (including those passively browsing rooms or reading) can be significantly higher since they generate far fewer requests.
+
+**What limits us first:** the single Gunicorn worker processing requests sequentially. When an email send blocks for 200 ms, every request behind it waits. At low email frequency this is tolerable; at high concurrency the queue compounds.
+
+### Scaling Roadmap
+
+#### Tier 1: 500+ Active Users — Quick Wins (hours of work)
+
+The current architecture is close. These changes remove the obvious single-worker bottleneck without changing the deployment model.
+
+| Change | Why | Effort |
+|--------|-----|--------|
+| Increase Gunicorn workers to 4 (`--workers 4` in `deploy.sh`) | Parallelise request handling; one worker blocked on SES does not stall the others | 1 line |
+| Move email dispatch to a background thread | `threading.Thread(target=_send, ...)` in `app.py` — the HTTP response returns immediately, email sends asynchronously | ~20 lines |
+| Enable SQLite WAL mode (`PRAGMA journal_mode=WAL` in `database.py`) | Allows concurrent reads while a write is in progress | 1 line |
+| Serve static assets via Nginx | Gunicorn should not serve CSS/JS; Nginx handles static files with zero Python overhead | Small Nginx config |
+| Add HTTPS via Nginx + Let's Encrypt | Fixes the Lighthouse Best Practices score from 78 to ~95+; mandatory for any real deployment | `certbot` + Nginx TLS block |
+| Enable `gzip` in Nginx | Addresses the Lighthouse "minify JS" flag; compresses responses on the fly | 2 lines in `nginx.conf` |
+
+**Expected capacity:** 4 workers each handling ~90 req/s blended = ~360 req/s total. With background email threads, the SES blocking disappears entirely from the request path. This comfortably supports **500-1,000 active users** and **2,000-3,000 connected users**.
+
+#### Tier 2: 5,000+ Active Users — Managed Services (days of work)
+
+SQLite and in-memory sessions hit their ceiling. This tier introduces AWS managed services for horizontal scaling.
+
+| Change | Why | Effort |
+|--------|-----|--------|
+| Replace SQLite with Amazon RDS (PostgreSQL) | True concurrent writes, connection pooling, automated backups, Multi-AZ failover | Moderate — swap `sqlite3` calls for `psycopg2`; the schema is 1:1 compatible |
+| Move sessions to ElastiCache (Redis) | Sessions survive restarts and are shared across multiple app instances | Replace the `sessions = {}` dict with Flask-Session backed by Redis |
+| Deploy behind an ALB (Application Load Balancer) | Distribute traffic across multiple EC2 instances; health checks auto-remove unhealthy nodes | ALB + target group |
+| Auto Scaling Group (2-4 instances) | Horizontal scaling — spin up instances under load, scale down when idle | Launch template + ASG policy (e.g. CPU > 70 % = add instance) |
+| Move email to SQS + Lambda | Fully asynchronous email — app pushes to an SQS queue, a Lambda function consumes and calls SES. Zero blocking, built-in retry. | ~50 lines of Lambda code + SQS queue |
+| Static assets on S3 + CloudFront | CDN-cached static files at edge locations worldwide; removes all static load from EC2 | Upload `static/` to S3, point CloudFront at it |
+| Exit SES sandbox | Sandbox caps at 200 emails/day; production mode allows 50,000+/day | AWS Console request (approved in ~24 h) |
+
+**Architecture at this tier:**
+
+```
+CloudFront (static assets, gzip, edge caching)
+        │
+        ▼
+   ALB (HTTPS termination, health checks)
+    ┌───┴───┐
+    ▼       ▼
+ EC2 ×2-4  (Gunicorn, 4 workers each)
+    │       │
+    ├───────┴──► ElastiCache Redis (shared sessions)
+    │
+    ├──────────► RDS PostgreSQL (Multi-AZ)
+    │
+    └──────────► SQS ──► Lambda ──► SES
+```
+
+**Expected capacity:** 2-4 instances × 4 workers × ~90 req/s = **700-1,400 req/s**. With the ASG scaling up under load, this comfortably handles **5,000+ active users**. Cost estimate: ~$80-150/month (t3.small instances, db.t3.micro RDS, ElastiCache t3.micro, CloudFront free tier).
+
+#### Tier 3: 10,000+ Active Users — Container Orchestration (weeks of work)
+
+At this scale, every component must be independently scalable, observable, and fault-tolerant.
+
+| Change | Why | Effort |
+|--------|-----|--------|
+| Containerise with ECS Fargate | No EC2 management; containers auto-scale and scale to zero. A `Dockerfile` + task definition replaces `deploy.sh` | Moderate |
+| RDS read replicas | Read-heavy endpoints (`/api/rooms`, `/api/lookup`) fan out across replicas; writes go to the primary | RDS Console toggle + connection routing |
+| RDS Proxy or PgBouncer | 10K+ users can open thousands of DB connections; pooling collapses them to ~50 actual connections | Change the connection string to RDS Proxy endpoint |
+| API Gateway + Lambda for stateless reads | `/api/rooms` and `/health` are pure reads with no session — serve them serverlessly at massive scale, zero idle cost | Extract to Lambda functions |
+| WAF (Web Application Firewall) | Rate limiting, bot protection, SQL injection filtering at the ALB edge | AWS WAF rule set |
+| DynamoDB for sessions | Fully serverless, auto-scaling, no capacity planning; cheaper than Redis at high scale | Flask-Session DynamoDB backend |
+| Observability: CloudWatch + X-Ray | Metrics, distributed tracing, structured logging, alarms on p99 latency and error rates | SDK integration |
+
+**Expected capacity:** Fargate auto-scales containers independently of instance types. With read replicas absorbing the read fan-out and Lambda handling stateless endpoints, this architecture supports **10,000-50,000+ concurrent active users**. Cost estimate: ~$300-800/month depending on traffic patterns (Fargate scales to zero when idle; RDS is the fixed-cost anchor).
+
+#### Beyond 50,000: What Changes Fundamentally
+
+The keyword-based chatbot engine is an advantage at extreme scale — no LLM API rate limits, no token costs, no latency variance. The bottlenecks shift entirely to infrastructure:
+
+- **Database sharding** or migration to DynamoDB for reservation writes (partition by date range or region).
+- **Multi-region deployment** with Route 53 latency-based routing for global users.
+- **Event-driven architecture**: every booking event publishes to EventBridge; email, analytics, and audit consumers process independently.
+- **WebSocket transport for chat** if real-time typing indicators are needed, replacing the current HTTP request/response model.
+- The frontend remains unchanged at every tier — 45 KB of vanilla JS with no hydration or bundle cost.
 
 ---
 
